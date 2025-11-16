@@ -65,6 +65,10 @@
             margin-top: 12px;
             border: 1px dashed #fcd34d;
         }
+        .task-font {
+            font-size: 1.5rem; /* Increased font size for the task */
+            line-height: 2rem;
+        }
         .incorrect-answer {
             animation: shake 0.5s;
         }
@@ -82,7 +86,7 @@
         ПРОТОКОЛ "АРХИВ 408": РУКОПИСЬ ВОЙНИЧА
     </h1>
     <p class="text-center text-sm mb-6 text-gray-400">
-        Криптоаналитик: Инициализация. Стадия: <span id="stageDisplay" class="font-bold text-yellow-400">ДОСЬЕ 00</span> | Попыток: <span id="attemptsDisplay" class="font-bold text-red-400">5</span>
+        Криптоаналитик: Инициализация. Стадия: <span id="stageDisplay" class="font-bold text-yellow-400">ДОСЬЕ 00</span> | Попыток: <span id="attemptsDisplay" class="font-bold text-red-400">3</span>
     </p>
 
     <!-- Output Terminal (Dossier / Task) -->
@@ -115,158 +119,213 @@
             "ДОСЬЕ 00: БРИФИНГ",
             "ДОСЬЕ 01: НАХОДКА В ИТАЛИИ",
             "ДОСЬЕ 02: БОТАНИЧЕСКИЙ ТРАКТАТ",
-            "ДОСЬЕ 03: ЗАГАДКА ШИФРА",
-            "ДОСЬЕ 04: АНОМАЛИЯ ПЕРЕПЛЕТА",
-            "ДОСЬЕ 05: ТЕОРИЯ СКРЫТОГО ТЕКСТА",
-            "ДОСЬЕ 06: ОКОНЧАТЕЛЬНЫЙ ВЫВОД"
+            "ДОСЬЕ 03: ЗАСЕКРЕЧЕННОЕ ПИСЬМО", // НОВЫЙ ЭТАП
+            "ДОСЬЕ 04: ЗАГАДКА ШИФРА",
+            "ДОСЬЕ 05: АНОМАЛИЯ ПЕРЕПЛЕТА",
+            "ДОСЬЕ 06: ТЕОРИЯ СКРЫТОГО ТЕКСТА",
+            "ДОСЬЕ 07: ОКОНЧАТЕЛЬНЫЙ ВЫВОД"
         ],
-        attempts: 5,
-        hintsRevealed: {} // Tracks which stage hints have been revealed: {1: false, 2: true, ...}
+        attempts: 3, // Установлено 3 попытки
+        hintsRevealed: {}
     };
 
-    // Investigation stages (6 Dossiers + Start)
+    /** Vigenere Cipher implementation for the new puzzle */
+    const RUS_ALPHABET = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ';
+    const RUS_ALPHABET_LOWER = 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя';
+    
+    // Function to decrypt Vigenere (only supports Russian for this puzzle)
+    function vigenereDecrypt(ciphertext, key) {
+        let decrypted = '';
+        let keyIndex = 0;
+        const alphabet = RUS_ALPHABET_LOWER;
+        
+        // Normalize key
+        const normalizedKey = key.toLowerCase().replace(/[^а-яё]/g, '');
+
+        for (let i = 0; i < ciphertext.length; i++) {
+            let char = ciphertext[i].toLowerCase();
+            const charIndex = alphabet.indexOf(char);
+            
+            if (charIndex === -1) {
+                // Keep spaces and unknown characters as is
+                decrypted += ciphertext[i]; 
+                continue;
+            }
+
+            const keyChar = normalizedKey[keyIndex % normalizedKey.length];
+            const keyCharIndex = alphabet.indexOf(keyChar);
+            
+            // Decryption formula: (C - K + 33) mod 33
+            let newIndex = (charIndex - keyCharIndex + alphabet.length) % alphabet.length;
+            
+            let newChar = alphabet[newIndex];
+            
+            // Restore original case (simple check for uppercase in the original)
+            if (ciphertext[i] === ciphertext[i].toUpperCase() && ciphertext[i].match(/[А-ЯЁ]/)) {
+                newChar = newChar.toUpperCase();
+            }
+
+            decrypted += newChar;
+            keyIndex++;
+        }
+        return decrypted;
+    }
+
+    // Investigation stages (7 Dossiers + Start)
     const stages = [
-        { // Stage 0: Start (FIXED: Added nextStage: 1)
-            output: "ДОБРО ПОЖАЛОВАТЬ, АНАЛИТИК. Вы возглавляете операцию 'АРХИВ 408'. Ваша задача — определить подлинность и содержание таинственной Рукописи XV века, написанной на неизвестном языке.\n\n<span class='text-indigo-300'>Цель:</span> Расшифровать или признать мистификацией. ",
+        { // Stage 0: Start
+            output: "ДОБРО ПОЖАЛОВАТЬ, АНАЛИТИК. Вы возглавляете операцию 'АРХИВ 408'. Ваша задача — определить подлинность и содержание таинственной Рукописи XV века, написанной на неизвестном языке.\n\n<span class='text-indigo-300'>Цель:</span> Расшифровать или признать мистификацией.",
             taskType: 'button',
             task: {
                 buttonText: "ПРИНЯТЬ ДОСЬЕ 01",
                 correctAnswer: true,
                 successMsg: "Досье 01 загружено. Приступаем к истории обнаружения.",
-                nextStage: 1 // FIX: Ensures transition to stage 1
+                nextStage: 1 
             }
         },
         { // Stage 1: Acquisition (ВОЙНИЧ)
             output: `
 <span class='text-yellow-400 font-bold'>ДОСЬЕ 01: НАХОДКА В ИТАЛИИ</span>
-<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (1912 г.):</span> Рукопись приобретена в иезуитской коллегии Вилла Мондрагоне. Последним известным владельцем до этого был Иоганн Марци (ректор Карлова университета XVII века).
+<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (1912 г.):</span> Рукопись приобретена в иезуитской коллегии Вилла Мондрагоне. До этого она долгое время хранилась у европейских ученых, включая Иоганна Марци, который адресовал книгу Афанасию Кирхеру.
 <div class="clue-box">
-    <p class="font-bold text-lg text-indigo-300 mb-2">УЛИКА 1: ФАКСИМИЛЕ ТЕЛЕГРАММЫ (1912)</p>
-    <p class="text-sm">"Успешная сделка в Риме. Книгу забрал человек, который дал ей свое имя. Передайте информацию его жене, Этель."</p>
-    <p class="text-xs mt-2 text-gray-400">
-        <span class='text-red-400'>КОДОВЫЙ ФРАГМЕНТ A1:</span> Шифр Цезаря (+1) на имени покупателя: $\\text{В О Й Н И Ч} \\rightarrow \\text{Г П К О К Ш}$ (Это отвлекающая улика, ведущая к тому же слову.)
+    <p class="font-bold text-xl text-indigo-300 mb-2">УЛИКА 1: БИОГРАФИЧЕСКИЙ ФАКТОР</p>
+    <p class="text-base">В 1912 году книготорговец из Нью-Йорка, по происхождению литовец, специализировавшийся на редких манускриптах, заключил сделку с иезуитами. Он был убежден в подлинности и значимости книги, считая ее величайшей находкой в своей жизни. Именно благодаря его усилиям по продвижению и продаже, а также его известности в коллекционных кругах, книга получила его имя. Его жена, писательница Этель Лилиан, сыграла роль в первых попытках перевода, но безуспешно.</p>
+    <p class="text-xs mt-2 text-gray-400 task-font">
+        <span class='text-red-400'>ДЕКОДИРОВАНИЕ:</span> Найдите и введите фамилию книготорговца, чье имя закрепилось за рукописью. (рус. яз., нижний регистр).
     </p>
-</div>
-<span class='text-indigo-300'>ЗАДАНИЕ:</span> Введите фамилию книготорговца, который вывез рукопись и дал ей свое имя. (рус. яз., нижний регистр).`,
+</div>`,
             taskType: 'text',
             task: {
                 correctAnswer: "войнич",
                 question: "Введите фамилию:",
-                successMsg: "<span class='text-green-400'>АНАЛИЗ 01:</span> Верно. Книготорговец, давший имя рукописи. Переходим к изучению ее содержания.",
+                successMsg: "<span class='text-green-400'>АНАЛИЗ 01:</span> Верно. Фамилия книготорговца, который вывел рукопись из тени. Переходим к изучению ее содержания.",
                 nextStage: 2,
-                hints: ["Уилфрид Войнич 1912", "кто купил рукопись войнича"]
+                hints: ["Имя владельца стало названием книги. Кто это?"]
             }
         },
         { // Stage 2: Botanical Absurdity (ФАНТОМЫ)
             output: `
 <span class='text-yellow-400 font-bold'>ДОСЬЕ 02: БОТАНИЧЕСКИЙ ТРАКТАТ</span>
-<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (Секция "Ботаника"):</span> Раздел содержит более 100 изображений растений. Радиоуглеродный анализ подтверждает дату: 1404–1438 гг.
+<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (Секция "Ботаника"):</span> В манускрипте представлено 113 изображений растений, которые до сих пор не удалось идентифицировать. Радиоуглеродный анализ пергамента подтверждает XV век.
 <div class="clue-box">
-    <p class="font-bold text-lg text-indigo-300 mb-2">УЛИКА 2: ОТЧЕТ ЭКСПЕРТА-БОТАНИКА (1921 г.)</p>
-    <p class="text-sm">"Изучение флоры показало, что листья и цветы не соответствуют ни одному известному виду. Они собраны из частей разных растений или полностью вымышлены, представляя собой совокупность несуществующих объектов."</p>
-    <p class="text-xs mt-2 text-gray-400">
-        <span class='text-red-400'>КОДОВЫЙ ФРАГМЕНТ B1:</span> Применимая к растениям часть шифра: $\\mathbf{F} \\leftarrow 6, \\mathbf{A} \\leftarrow 1, \\mathbf{N} \\leftarrow 5$.
+    <p class="font-bold text-xl text-indigo-300 mb-2">УЛИКА 2: АНАЛИЗ ИЛЛЮСТРАЦИЙ</p>
+    <p class="text-base">Исследование ботаниками профессором Р. Такером и другими экспертами показало, что растения не существуют в реальной флоре. Это не просто стилизованные или экзотические виды, а **химерические композиции**. У них может быть стебель одного известного европейского растения, листья другого, а цветок третьего, часто изображенного с корнями, но без тени. Они являются абсолютными **биологическими аномалиями**, не поддающимися таксономической классификации, как будто они были просто придуманы.</p>
+    <p class="text-xs mt-2 text-gray-400 task-font">
+        <span class='text-red-400'>ДЕКОДИРОВАНИЕ:</span> Опишите одним словом, что представляют собой эти несуществующие, химерические растения. (множественное число, нижний регистр).
     </p>
-</div>
-
-<span class='text-indigo-300'>ЗАДАНИЕ:</span> Опишите одним словом, что представляют собой эти несуществующие растения. (множественное число, нижний регистр).`,
+</div>`,
             taskType: 'text',
             task: {
                 correctAnswer: "фантомы",
                 question: "Введите слово, описывающее несуществующие растения (мн.ч.):",
-                successMsg: "<span class='text-green-400'>АНАЛИЗ 02:</span> Фантомы! Если иллюстрации ненастоящие, то и текст, возможно, ненастоящий. Переходим к структуре языка.",
-                nextStage: 3,
-                hints: ["Рукопись Войнича изображения растений", "фантомные растения войнича"]
+                successMsg: "<span class='text-green-400'>АНАЛИЗ 02:</span> Фантомы! Если предмет изображения вымышлен, это критический индикатор. Перед анализом структуры текста, проверим слухи о скрытом послании.",
+                nextStage: 3, // Переход на новый этап 3
+                hints: ["Иллюзорные, вымышленные объекты, не имеющие реального аналога."]
             }
         },
-        { // Stage 3: Cipher Structure (СЛОГИ)
+        { // Stage 3: NEW CRYPTO STAGE (ВОЗРАСТА)
             output: `
-<span class='text-yellow-400 font-bold'>ДОСЬЕ 03: ЗАГАДКА ШИФРА</span>
-<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (Криптоанализ):</span> Текст написан уникальным алфавитом. Анализ частоты показал, что он не подчиняется <span class='text-red-400'>Закону Ципфа</span> (распределение частоты слов в естественном языке).
+<span class='text-yellow-400 font-bold'>ДОСЬЕ 03: ЗАСЕКРЕЧЕННОЕ ПИСЬМО</span>
+<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (Обнаружение):</span> На задней обложке рукописи, под слоем клея, обнаружены микроскопические царапины, формирующие последовательность символов, нанесенных, предположительно, более поздним пером. Шифр принадлежит к классу **полиалфавитных**, требующих ключевого слова.
 <div class="clue-box">
-    <p class="font-bold text-lg text-indigo-300 mb-2">УЛИКА 3: ЛИНГВИСТИЧЕСКОЕ ИССЛЕДОВАНИЕ (1976 г.)</p>
-    <p class="text-sm">"Вместо сложного распределения, большинство 'слов' состоят из повторяющихся 2-3 символьных групп, что указывает на искусственность. Слова являются комбинациями коротких, повторяющихся строительных блоков."</p>
-    <p class="text-xs mt-2 text-gray-400">
-        <span class='text-red-400'>КОДОВЫЙ ФРАГМЕНТ C1: Псевдо-Азбука.</span> Нарушение Закона Ципфа в тексте обусловлено избыточным использованием коротких **строительных блоков**.
+    <p class="font-bold text-xl text-indigo-300 mb-2">УЛИКА 3: ШИФРОВАЛЬНЫЙ БЛОК</p>
+    <p class="text-base font-bold text-red-300 text-lg md:text-xl">ШИФРОТЕКСТ: <span class="text-yellow-400">НЖЖШЧФЦК ЦЩЮЦЩА ЧАЖСЬНЭ</span></p>
+    <p class="text-base mt-2">Ключевое слово для расшифровки, по данным нашей нейросети, связано с единственным физическим доказательством подлинности манускрипта, которое было получено с помощью радиоуглеродного анализа.</p>
+    <p class="text-xs mt-2 text-gray-400 task-font">
+        <span class='text-red-400'>ДЕКОДИРОВАНИЕ:</span> Расшифруйте фразу, используя ключевое слово, связанное с датированным материалом. Введите **ключевое слово из расшифрованной фразы**, которое указывает на аномалию (рус. яз., нижний регистр).
     </p>
-</div>
-
-<span class='text-indigo-300'>ЗАДАНИЕ:</span> Введите ключевое слово, описывающее эти короткие, повторяющиеся строительные блоки "языка" (множественное число, нижний регистр).`,
+    <p class="text-xs mt-2 text-green-400 font-mono">
+        <!-- Vigenere Decrypted: АРТЕФАКТ АНОМАЛИИ ВОЗРАСТА (Key: ПЕРГАМЕНТ) -->
+        (Подсказка: ищите слово-вывод из трех слов в расшифрованной фразе.)
+    </p>
+</div>`,
+            taskType: 'text',
+            task: {
+                correctAnswer: "возраста",
+                question: "Введите ключевое слово-вывод из расшифровки:",
+                successMsg: "<span class='text-green-400'>АНАЛИЗ 03:</span> Расшифровано: АРТЕФАКТ АНОМАЛИИ ВОЗРАСТА. Вывод о том, что пергамент старше чернил, подтверждает теорию мистификации. Переходим к структуре текста Войнича.",
+                nextStage: 4,
+                hints: ["Ключ к шифру — это материал, из которого сделаны страницы."]
+            }
+        },
+        { // Stage 4: Cipher Structure (СЛОГИ) - Old Stage 3
+            output: `
+<span class='text-yellow-400 font-bold'>ДОСЬЕ 04: ЗАГАДКА ШИФРА</span>
+<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (Криптоанализ):</span> Текст написан уникальным, нелатинским алфавитом (Войничевский алфавит). Анализ показал, что **Закон Ципфа** (распределение частоты слов) не соблюдается в полной мере.
+<div class="clue-box">
+    <p class="font-bold text-xl text-indigo-300 mb-2">УЛИКА 4: КВАНТИТАТИВНЫЙ АНАЛИЗ ТЕКСТА</p>
+    <p class="text-base">Исследование, проведенное в 1970-х годах, выявило чрезвычайно низкую лексическую плотность и высокую степень **избыточности**. Слова в тексте Войнича почти всегда формируются из ограниченного набора очень часто повторяющихся коротких последовательностей символов (из двух-трех знаков). Это выглядит как **искусственное письмо**, сгенерированное путем многократного комбинирования базовых звуковых/графических единиц, а не естественный язык, который имеет более сложное и вариативное распределение букв и слов.</p>
+    <p class="text-xs mt-2 text-gray-400 task-font">
+        <span class='text-red-400'>ДЕКОДИРОВАНИЕ:</span> Назовите базовые, наименьшие единицы произношения, из которых складываются слова в таком искусственном конструкте. (множественное число, нижний регистр).
+    </p>
+</div>`,
             taskType: 'text',
             task: {
                 correctAnswer: "слоги",
                 question: "Введите слово, описывающее строительные блоки (мн.ч.):",
-                successMsg: "<span class='text-green-400'>АНАЛИЗ 03:</span> Слоги! Их избыточность — ключ к пониманию текста. Переходим к изучению физических аномалий пергамента.",
-                nextStage: 4,
-                hints: ["Рукопись Войнича нарушает закон Ципфа", "повторяющиеся блоки в тексте Войнича"]
+                successMsg: "<span class='text-green-400'>АНАЛИЗ 04:</span> Слоги! Избыточное слоговое письмо — важный признак имитации языка. Переходим к физическим аномалиям.",
+                nextStage: 5,
+                hints: ["Ключевые 'кирпичики' речи, состоящие из гласного и согласного."]
             }
         },
-        { // Stage 4: Quire Structure (РАЗВОРОТЫ)
+        { // Stage 5: Quire Structure (РАЗВОРОТЫ) - Old Stage 4
             output: `
-<span class='text-yellow-400 font-bold'>ДОСЬЕ 04: АНОМАЛИЯ ПЕРЕПЛЕТА</span>
-<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (Секция "Космология"):</span> Рукопись состоит из 17 тетрадей (quire). В разделе "Космология" есть несколько иллюстраций, которые не поместились на обычные листы.
+<span class='text-yellow-400 font-bold'>ДОСЬЕ 05: АНОМАЛИЯ ПЕРЕПЛЕТА</span>
+<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (Космология и Гидрология):</span> Разделы "Космология" и "Гидрология" содержат иллюстрации, которые требуют гораздо большего пространства, чем стандартный пергаментный лист.
 <div class="clue-box">
-    <p class="font-bold text-lg text-indigo-300 mb-2">УЛИКА 4: ОТЧЕТ О КОНСЕРВАЦИИ (1961 г.)</p>
-    <p class="text-sm">"Астрологические диаграммы были выполнены на сложенных пергаментах, которые затем пришивались к корешку. Мы обнаружили пять таких уникальных листов, которые раскладываются, увеличивая площадь в несколько раз."</p>
-    <p class="text-xs mt-2 text-gray-400">
-        <span class='text-red-400'>КОДОВЫЙ ФРАГМЕНТ D1:</span> Количество тетрадей (17) и количество этих сложенных листов (5) — это $\\mathbf{17-5=12}$.
+    <p class="font-bold text-xl text-indigo-300 mb-2">УЛИКА 5: СТРУКТУРА ТЕТРАДЕЙ</p>
+    <p class="text-base">Физическое исследование, проведенное в Йельском университете (Библиотека редких книг Бейнеке), подтвердило, что рукопись состоит из нескольких тетрадей (quires). В некоторых из них, особенно там, где изображены астрономические 'Розетки' и сложная 'Гидрология' (бассейны и трубы), листы пергамента были сложены не вдвое, а в несколько раз (от 3 до 6 секций). При полном раскрытии они образуют панорамные карты или диаграммы, демонстрирующие крупномасштабные, сложные сцены. Это очень редкое решение для средневекового манускрипта.</p>
+    <p class="text-xs mt-2 на text-gray-400 task-font">
+        <span class='text-red-400'>ДЕКОДИРОВАНИЕ:</span> Назовите тип страниц, которые складываются в несколько раз для создания панорамных иллюстраций. (множественное число, нижний регистр).
     </p>
-</div>
-
-<span class='text-indigo-300'>ЗАДАНИЕ:</span> Назовите тип страниц, которые складываются в несколько раз и содержат самые крупные иллюстрации. (множественное число, нижний регистр).`,
+</div>`,
             taskType: 'text',
             task: {
                 correctAnswer: "развороты",
-                question: "Введите тип страниц, которые складываются в несколько раз (мн.ч.):",
-                successMsg: "<span class='text-green-400'>АНАЛИЗ 04:</span> Развороты. Эти структурные аномалии могут быть частью сложного дизайна. Переходим к теории о создании текста.",
-                nextStage: 5,
-                hints: ["Рукопись Войнича сложенные листы", "книжные развороты"]
+                question: "Введите тип страниц (мн.ч.):",
+                successMsg: "<span class='text-green-400'>АНАЛИЗ 05:</span> Развороты. Физическое устройство книги так же необычно, как и ее содержание. Переходим к криптографической гипотезе.",
+                nextStage: 6,
+                hints: ["Панорамные страницы, которые 'раскладываются'."]
             }
         },
-        { // Stage 5: Steganography (СТЕГАНОГРАФИЯ)
+        { // Stage 6: Steganography (СТЕГАНОГРАФИЯ) - Old Stage 5
             output: `
-<span class='text-yellow-400 font-bold'>ДОСЬЕ 05: ТЕОРИЯ СКРЫТОГО ТЕКСТА</span>
-<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (Гипотеза):</span> Избыточность слогов (Досье 03) привела к теории, что текст является "прикрытием". Возможно, короткое сообщение было "раздуто" до сотен страниц.
+<span class='text-yellow-400 font-bold'>ДОСЬЕ 06: ТЕОРИЯ СКРЫТОГО ТЕКСТА</span>
+<span class='text-indigo-300'>ИСТОРИЧЕСКАЯ СВОДКА (Гипотеза):</span> Избыточность текста (Досье 04) породила теорию о том, что видимый текст не несет смысла, а является лишь **обфускационным слоем** (шумом), скрывающим настоящее сообщение.
 <div class="clue-box">
-    <p class="font-bold text-lg text-indigo-300 mb-2">УЛИКА 5: ИССЛЕДОВАНИЕ КАНДИДАТА ФИЛОСОФСКИХ НАУК (1985 г.)</p>
-    <p class="text-sm">"Метод, при котором полезная информация скрывается в другом, внешне безобидном сообщении, именуется 'письмо с прикрытием'. Он позволяет спрятать реальное сообщение, используя 'пустые' символы или слоги."</p>
-    <p class="text-xs mt-2 text-gray-400">
-        <span class='text-red-400'>КОДОВЫЙ ФРАГМЕНТ E1:</span> Ключевое слово, сдвинутое на две позиции в алфавите (Шифр Цезаря): УФЖЕБОПЖУБКЗСГН.
+    <p class="font-bold text-xl text-indigo-300 mb-2">УЛИКА 6: МЕТОДЫ ТАЙНОПИСИ</p>
+    <p class="text-base">В отличие от криптографии, которая шифрует сообщение, этот метод стремится скрыть сам факт его существования. Сообщение вкладывается в совершенно **безобидный контейнер**, например, в текст, не имеющий смысла. В случае Войнича, 'безобидный контейнер' — это тысячи слогоподобных, высокочастотных слов. Если сообщение спрятано внутри этого 'шума', то попытки расшифровать сам алфавит обречены на провал.</p>
+    <p class="text-xs mt-2 text-gray-400 task-font">
+        <span class='text-red-400'>ДЕКОДИРОВАНИЕ:</span> Введите название криптографического метода сокрытия сообщения в другом тексте. (рус. яз., нижний регистр).
     </p>
-</div>
-
-<span class='text-indigo-300'>ЗАДАНИЕ:</span> Введите название криптографического метода сокрытия сообщения в другом тексте. (рус. яз., нижний регистр).`,
+</div>`,
             taskType: 'text',
             task: {
                 correctAnswer: "стеганография",
-                question: "Введите название метода сокрытия сообщения в другом тексте:",
-                successMsg: "<span class='text-green-400'>АНАЛИЗ 05:</span> Стеганография. Это подтверждает возможность того, что книга является блестящим прикрытием. Переходим к окончательному выводу.",
-                nextStage: 6,
-                hints: ["метод сокрытия информации в другом сообщении", "стеганография в рукописи войнича"]
+                question: "Введите название метода сокрытия сообщения:",
+                successMsg: "<span class='text-green-400'>АНАЛИЗ 06:</span> Стеганография. Если текст — это контейнер для шума, то его невозможно расшифровать. Переходим к окончательному вердикту.",
+                nextStage: 7,
+                hints: ["Искусство маскировки, при котором секретность заключается в невидимости."]
             }
         },
-        { // Stage 6: Final Conclusion (МИСТИФИКАЦИЯ)
+        { // Stage 7: Final Conclusion (МИСТИФИКАЦИЯ) - Old Stage 6
             output: `
-<span class='text-yellow-400 font-bold'>ДОСЬЕ 06: ОКОНЧАТЕЛЬНЫЙ ВЫВОД</span>
+<span class='text-yellow-400 font-bold'>ДОСЬЕ 07: ОКОНЧАТЕЛЬНЫЙ ВЫВОД</span>
 
 <span class='text-indigo-300'>ОБОБЩЕНИЕ СВОДОК:</span> 
-1. **Находка:** Книготорговец, давший имя.
-2. **Содержание:** Растения-несуществующие объекты.
-3. **Структура языка:** Повторяющиеся строительные блоки.
-4. **Теория:** Использование метода скрытия сообщения.
+1. **Приобретение:** Имя, ставшее брендом (Войнич).
+2. **Содержание:** Несуществующие, химерические растения (Фантомы).
+3. **Аномалия:** Артефакт с аномалией **возраста**.
+4. **Структура языка:** Искусственная избыточность (Слоги).
+5. **Теория:** Обфускационный слой (Стеганография).
 
-<p class="text-sm mt-2 text-gray-500">
-    <span class='text-green-400'>Подсказка для Google:</span> "теория обмана рукопись войнича"
-</p>
 <div class="clue-box">
-    <p class="font-bold text-lg text-indigo-300 mb-2">УЛИКА 6: ЗАКЛЮЧЕНИЕ КРИПТОАНАЛИТИЧЕСКОГО СОВЕТА</p>
-    <p class="text-sm">"Отсутствие ошибок, неестественное распределение символов, вымышленные иллюстрации... Ведущая гипотеза: это текст, созданный для того, чтобы выглядеть зашифрованным, вероятно, с целью продажи за крупную сумму как алхимический обман."</p>
-    <p class="text-xs mt-2 text-gray-400">
-        <span class='text-red-400'>Ключ к финалу:</span> Какое слово наиболее точно описывает создание фальшивки с целью получения выгоды?
+    <p class="font-bold text-xl text-indigo-300 mb-2">УЛИКА 7: КОНСЕНСУС КРИПТОАНАЛИТИЧЕСКОГО СООБЩЕСТВА (2020 г.)</p>
+    <p class="text-base">Современный консенсус криптоаналитиков и лингвистов склоняется к одному выводу. Несмотря на то, что пергамент был датирован XV веком, что придавало книге 'подлинность' возраста, все остальные элементы (несуществующие изображения, статистически аномальный текст) указывают на создание артефакта с **намеренной неразрешимостью**. Книга, вероятно, была создана в период Возрождения или даже позже, с целью введения в заблуждение коллекционеров и получения высокой прибыли.</p>
+    <p class="text-xs mt-2 text-gray-400 task-font">
+        <span class='text-red-400'>ДЕКОДИРОВАНИЕ:</span> Сформулируйте окончательный вывод. Введите ОДНО слово, описывающее подделку с целью обмана (рус. яз., нижний регистр).
     </p>
-</div>
-
-<span class='text-indigo-300'>ЗАДАНИЕ:</span> Сформулируйте окончательный вывод. Введите ОДНО слово, описывающее создание загадки с целью обмана (рус. яз., нижний регистр).`,
+</div>`,
             taskType: 'finalConclusion',
             task: {
                 question: "Введите ОДНО слово, описывающее обман:",
@@ -278,11 +337,11 @@
                     <hr class='my-4 border-gray-600'>
                     
                     <h3 class='text-2xl font-bold text-red-400'>ПРОТОКОЛ ВЫПОЛНЕН: ИСТИНА РУКОПИСИ ВОЙНИЧА</h3>
-                    <p>Ваш вывод полностью совпадает с ведущей криптоаналитической теорией: Рукопись Войнича — это, скорее всего, <span class='font-extrabold text-red-300'>${input.toUpperCase()}</span>, блестяще выполненная с использованием пергамента XV века для придания ей подлинности. Цель: финансовая выгода или розыгрыш. Ваше расследование завершено. </p>
+                    <p>Ваш вывод полностью совпадает с ведущей криптоаналитической теорией: Рукопись Войнича — это, скорее всего, <span class='font-extrabold text-red-300'>${input.toUpperCase()}</span>, блестяще выполненная с использованием пергамента XV века. Она создана как **намеренно неразрешимая** загадка для получения финансовой выгоды. Ваше расследование завершено. </p>
                     `;
                 },
-                nextStage: 7,
-                hints: ["ведущая теория о рукописи войнича", "войнич мистификация"]
+                nextStage: 8,
+                hints: ["Искусный, но ложный 'шедевр' обмана."]
             }
         }
     ];
@@ -293,12 +352,28 @@
     }
 
     /** Show Modal Window */
-    function showModal(title, message, isError = false) {
+    function showModal(title, message, isError = false, afterAction = null) {
         document.getElementById('modalTitle').textContent = title;
         document.getElementById('modalMessage').innerHTML = message;
         
         document.getElementById('modalTitle').classList.remove('text-red-400', 'text-green-400');
         document.getElementById('modalTitle').classList.add(isError ? 'text-red-400' : 'text-green-400');
+        
+        const continueButton = document.querySelector('#messageModal button');
+        
+        // Custom action runs on modal close via hideModal
+        continueButton.onclick = () => {
+            if (afterAction) {
+                // Execute action before hiding the modal, e.g., transition stage
+                afterAction(); 
+            }
+            // If the modal is related to an error and attempts ran out, handle game over here
+            if (gameState.attempts <= 0 && isError) {
+                handleGameOver();
+            } else {
+                hideModal();
+            }
+        };
 
         document.getElementById('messageModal').classList.remove('hidden');
     }
@@ -306,28 +381,16 @@
     /** Hide Modal Window */
     function hideModal() {
         document.getElementById('messageModal').classList.add('hidden');
-        
-        const isError = document.getElementById('modalTitle').classList.contains('text-red-400');
-        
-        if (gameState.attempts <= 0 && isError) {
-            handleGameOver();
-        } else if (!isError) {
-            // Success: transition stage
-            // This is the correct logic for advancing the stage after a successful quiz answer or the start button.
-            if (stages[gameState.currentStage].task.nextStage) {
-                gameState.currentStage = stages[gameState.currentStage].task.nextStage;
-            }
-            loadStage(gameState.currentStage);
-        } else {
-             // Error, attempts > 0: reload current stage.
-             loadStage(gameState.currentStage);
-        }
     }
 
     /** Game Over */
     function handleGameOver() {
-        showModal("МИССИЯ ПРОВАЛЕНА", "Ваши попытки исчерпаны. Доступ к архиву заблокирован. Тайна Рукописи Войнича останется неразгаданной.", true);
-        document.getElementById('interactionArea').innerHTML = `<p class="text-3xl text-red-400 font-bold mt-8 text-center">РАССЛЕДОВАНИЕ ЗАКРЫТО.</p>`;
+        // Ensure the game is over if attempts hit zero
+        if (gameState.attempts <= 0) {
+            document.getElementById('stageDisplay').textContent = "ПРОВАЛ";
+            document.getElementById('terminalOutput').innerHTML = `<p class="text-3xl text-red-400 font-bold text-center">МИССИЯ ПРОВАЛЕНА</p><p class="mt-4 text-gray-300 text-center">Ваши попытки исчерпаны. Доступ к архиву заблокирован. Тайна Рукописи Войнича останется неразгаданной.</p>`;
+            document.getElementById('interactionArea').innerHTML = `<p class="text-3xl text-red-400 font-bold mt-8 text-center">РАССЛЕДОВАНИЕ ЗАКРЫТО.</p>`;
+        }
     }
 
     /** General Failure Handler */
@@ -349,20 +412,53 @@
          showModal("ОШИБКА АНАЛИЗА", message + `<br><br>У вас осталось **${gameState.attempts}** попыток. Пересмотрите УЛИКИ.`, true);
     }
 
-    /** Reveals the hidden Google queries (Hint) */
+    /** New function to handle skipping a dossier */
+    function handleSkip() {
+        const stageIndex = gameState.currentStage;
+        if (stageIndex >= stages.length - 1 || stageIndex === 0) return; // Cannot skip final or initial stage
+
+        gameState.attempts--;
+        updateAttemptsDisplay();
+
+        if (gameState.attempts <= 0) {
+            handleGameOver();
+            return;
+        }
+
+        const skippedStageName = gameState.stageNames[stageIndex];
+        const nextStageIndex = stageIndex + 1;
+
+        showModal(
+            "ДОСЬЕ ПРОПУЩЕНО", 
+            `Вы решили пропустить **${skippedStageName}**. За это вы потеряли 1 попытку. Осталось **${gameState.attempts}** попыток. Загрузка следующего Досье...`, 
+            true, 
+            () => {
+                // This function executes when the user closes the modal
+                gameState.currentStage = nextStageIndex;
+                loadStage(gameState.currentStage);
+            }
+        );
+    }
+
+    /** Reveals the hidden Hint */
     function revealHint() {
         const stageIndex = gameState.currentStage;
         const stageData = stages[stageIndex];
         
         if (!stageData.task.hints || gameState.hintsRevealed[stageIndex]) return;
 
+        const hintText = stageData.task.hints.join('<br>');
+
         // Mark hint as revealed
         gameState.hintsRevealed[stageIndex] = true;
         
-        // Use a modal to notify the user and then reload the stage
-        showModal("ПОДСКАЗКА АКТИВИРОВАНА", "Поисковые запросы добавлены в Досье.", false);
-
-        // NOTE: loadStage will be called by hideModal after the user closes the notification.
+        // Show modal with the hint text, and use afterAction to reload the current stage
+        showModal(
+            "ПОДСКАЗКА АКТИВИРОВАНА", 
+            `Криптическая подсказка для дедукции: <span class="font-bold text-yellow-300">${hintText}</span>. Она добавлена в ваше Досье.`, 
+            false, 
+            () => loadStage(stageIndex) 
+        );
     }
 
     /** Loads and displays the current stage */
@@ -379,17 +475,19 @@
         document.getElementById('stageDisplay').textContent = gameState.stageNames[stageIndex];
         updateAttemptsDisplay();
         
+        // Load main content
         outputElement.innerHTML = `<span class='font-bold text-indigo-300'>${gameState.stageNames[stageIndex]}</span>\n\n${stageData.output}`;
         
+        // Display the required input question below the content
         if (stageData.taskType === 'text' || stageData.taskType === 'finalConclusion') {
-            outputElement.innerHTML += `<p class="mt-6 text-yellow-400 font-bold">ЗАДАНИЕ: ${stageData.task.question}</p>`;
+            outputElement.innerHTML += `<p class="mt-6 text-yellow-400 font-bold task-font">${stageData.task.question}</p>`;
         }
         
         // If hint was revealed, display the hint content
         if (gameState.hintsRevealed[stageIndex] && stageData.task.hints) {
-            let hintHtml = `<div class="hint-box"><p class="font-bold text-yellow-400 mb-2">ПОДСКАЗКА ДЛЯ GOOGLE:</p><ul>`;
+            let hintHtml = `<div class="hint-box"><p class="font-bold text-yellow-400 mb-2">ПОДСКАЗКА:</p><ul>`;
             stageData.task.hints.forEach(hint => {
-                hintHtml += `<li><span class="text-green-400">→</span> "${hint}"</li>`;
+                hintHtml += `<li>"${hint}"</li>`; 
             });
             hintHtml += `</ul></div>`;
             outputElement.innerHTML += hintHtml; 
@@ -403,12 +501,17 @@
             const button = document.createElement('button');
             button.textContent = stageData.task.buttonText;
             button.className = 'action-button w-full bg-indigo-600 text-white py-3 font-semibold hover:bg-indigo-700';
-            button.onclick = () => handleSuccess(stageData, null);
+            // On success for Stage 0, we transition to the next stage
+            button.onclick = () => showModal("АНАЛИЗ УСПЕШЕН", stageData.task.successMsg, false, () => {
+                gameState.currentStage = stageData.task.nextStage;
+                loadStage(gameState.currentStage);
+            });
             interactionElement.appendChild(button);
         } else if (stageData.taskType === 'text' || stageData.taskType === 'finalConclusion') {
             // Text input for quiz
             const task = stageData.task;
             
+            // --- Input and Submit Button ---
             const inputGroup = document.createElement('div');
             inputGroup.className = 'flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 mb-4';
             
@@ -430,15 +533,6 @@
                 }
             };
 
-            // Hint Button
-            const hintButton = document.createElement('button');
-            hintButton.id = 'hintBtn';
-            hintButton.textContent = gameState.hintsRevealed[stageIndex] ? "ПОДСКАЗКА АКТИВИРОВАНА" : "ПОЛУЧИТЬ ПОДСКАЗКУ";
-            hintButton.className = 'action-button bg-yellow-600 text-white py-3 px-6 font-semibold hover:bg-yellow-700 w-full';
-            // Disable button if hint is already revealed
-            hintButton.disabled = gameState.hintsRevealed[stageIndex] === true; 
-            hintButton.onclick = revealHint;
-            
             // Handle Enter keypress
             inputField.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
@@ -450,7 +544,31 @@
             inputGroup.appendChild(inputField);
             inputGroup.appendChild(button);
             interactionElement.appendChild(inputGroup);
-            interactionElement.appendChild(hintButton);
+            
+            // --- Hint and Skip Buttons ---
+            const utilityGroup = document.createElement('div');
+            utilityGroup.className = 'flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2';
+            
+            const hintButton = document.createElement('button');
+            hintButton.id = 'hintBtn';
+            hintButton.textContent = gameState.hintsRevealed[stageIndex] ? "ПОДСКАЗКА АКТИВИРОВАНА" : "ПОЛУЧИТЬ ПОДСКАЗКУ";
+            hintButton.className = 'action-button bg-yellow-600 text-white py-3 px-6 font-semibold hover:bg-yellow-700 w-full md:w-1/2';
+            hintButton.disabled = gameState.hintsRevealed[stageIndex] === true; 
+            hintButton.onclick = revealHint;
+            
+            utilityGroup.appendChild(hintButton);
+
+            // Skip Button Logic (For stages 1 through 6)
+            if (stageIndex >= 1 && stageIndex <= 6) {
+                const skipButton = document.createElement('button');
+                skipButton.id = 'skipBtn';
+                skipButton.textContent = 'ПРОПУСТИТЬ ДОСЬЕ (-1 ПОПЫТКА)';
+                skipButton.className = 'action-button bg-gray-600 text-white py-3 px-6 font-semibold hover:bg-gray-700 w-full md:w-1/2';
+                skipButton.onclick = handleSkip;
+                utilityGroup.appendChild(skipButton);
+            }
+            
+            interactionElement.appendChild(utilityGroup);
         }
     }
 
@@ -459,7 +577,11 @@
         const input = document.getElementById('stageInput').value.trim().toLowerCase();
         
         if (input === task.correctAnswer.toLowerCase()) {
-            handleSuccess(stageData, input);
+            // Handle success: show modal, then transition stage
+            showModal("АНАЛИЗ УСПЕШЕН", stageData.task.successMsg, false, () => {
+                 gameState.currentStage = stageData.task.nextStage;
+                 loadStage(gameState.currentStage);
+            });
         } else if (input.length < 3) {
             showModal("ВНИМАНИЕ", "Введите ключевое слово для продолжения расследования.", true);
         } else {
@@ -472,6 +594,7 @@
         const input = document.getElementById('stageInput').value.trim().toLowerCase();
 
         if (input === finalTask.correctAnswer.toLowerCase()) {
+            // Final conclusion success logic
             document.getElementById('terminalOutput').innerHTML += finalTask.successMsg(input);
             document.getElementById('interactionArea').innerHTML = `<p class="text-xl text-green-400 font-bold text-center">ПРОТОКОЛ ЗАВЕРШЕН</p>`;
             gameState.currentStage = finalTask.nextStage;
@@ -484,14 +607,9 @@
         }
     }
 
-    /** General Success Handler */
-    function handleSuccess(stageData, input) {
-        showModal("АНАЛИЗ УСПЕШЕН", stageData.task.successMsg, false);
-    }
-
     // Initialize the game
     document.addEventListener('DOMContentLoaded', () => {
-        // Initialize hints state for all quiz stages (1-6)
+        // Initialize hints state for all quiz stages (1-7)
         for(let i = 1; i < stages.length; i++) {
             if (gameState.hintsRevealed[i] === undefined) {
                  gameState.hintsRevealed[i] = false;
