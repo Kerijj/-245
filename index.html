@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Расследование Рейса 245: Черный Ящик</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght=400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; 
+            color: #c9d1d9; 
+        }
+        .game-container {
+            max-width: 900px;
+            min-height: 80vh;
+        }
+        .terminal-output {
+            background-color: #161b22;
+            border-left: 4px solid #cc0000; /* Цвет катастрофы/тревоги */
+            min-height: 250px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+            box-shadow: 0 0 8px rgba(255, 0, 0, 0.2); 
+        }
+        .text-distress {
+            color: #ff6b6b; /* Цвет тревоги */
+            text-shadow: 0 0 3px #ff0000;
+        }
+        .action-button {
+            transition: all 0.15s ease-in-out;
+        }
+        .action-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+        }
+        /* Стили для текстового ввода */
+        #textInput, #cipherInput, #dilemmaInput {
+            background-color: #0d1117;
+            border-color: #660000;
+            color: #c9d1d9;
+            border-radius: 0.5rem;
+        }
+        #textInput:focus, #cipherInput:focus, #dilemmaInput:focus {
+            outline: none;
+            border-color: #ff4d4d;
+            box-shadow: 0 0 0 1px #ff4d4d;
+        }
+        .incorrect-answer {
+            animation: shake 0.5s;
+            border: 2px solid #ff4d4d;
+        }
+        @keyframes shake {
+            0%, 100% {transform: translateX(0);}
+            20%, 60% {transform: translateX(-5px);}
+            40%, 80% {transform: translateX(5px);}
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 flex justify-center items-center">
+
+<div id="game" class="game-container w-full bg-[#161b22] rounded-xl shadow-2xl p-6 md:p-10 border border-gray-700">
+    <h1 class="text-3xl md:text-4xl font-bold mb-6 text-distress border-b border-gray-700 pb-3">
+        ЧЕРНЫЙ ЯЩИК: Расследование Рейса 245
+    </h1>
+
+    <!-- Игровая панель -->
+    <div class="mb-6 space-y-4 flex justify-between items-center border-b border-gray-800 pb-3">
+        <div id="locationDisplay" class="text-xl font-semibold text-gray-400"></div>
+        <div class="flex items-center space-x-4">
+            <div id="progressDisplay" class="text-md font-medium text-red-300"></div>
+            <div id="livesDisplay" class="text-lg font-bold text-yellow-500"></div>
+        </div>
+    </div>
+
+    <!-- Терминал Вывода (История / Текущая Задача) -->
+    <div id="terminalOutput" class="terminal-output p-5 rounded-lg text-sm md:text-base font-mono overflow-y-auto mb-6">
+        Инициализация. Комплекс поглощен тишиной. Кажется, вы единственный, кто ищет правду о Рейсе 245 среди этих обломков. 
+    </div>
+
+    <!-- Область Взаимодействия (Кнопки / Ввод) -->
+    <div id="interactionArea" class="space-y-4">
+        <!-- Здесь будут динамически генерироваться кнопки или поля ввода -->
+    </div>
+
+    <!-- Модальное окно для сообщений (вместо alert()) -->
+    <div id="messageModal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-50 flex justify-center items-center">
+        <div class="bg-gray-900 p-6 rounded-lg shadow-xl max-w-sm w-full border border-red-700">
+            <h3 id="modalTitle" class="text-xl font-bold mb-4 text-distress">Системное Предупреждение</h3>
+            <p id="modalMessage" class="mb-6 text-gray-300"></p>
+            <button onclick="hideModal()" class="w-full bg-red-700 text-white py-2 rounded-lg font-semibold hover:bg-red-800 transition duration-150 action-button">
+                Продолжить
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<script type="text/javascript">
+    // Глобальное состояние игры
+    let gameState = {
+        currentLocation: 'Лаборатория Анализа Обломков',
+        unlockedLocations: ['Лаборатория Анализа Обломков'],
+        progress: {
+            'Лаборатория Анализа Обломков': { completed: false, attempts: 0 },
+            'Ангар: Секция Хранения Данных': { completed: false, attempts: 0 },
+            'Симулятор Полета (Сбой)': { completed: false, attempts: 0 },
+            'Комната Управления Диспетчерской': { completed: false, attempts: 0 },
+            'Черный Ящик: Главный Терминал': { completed: false, attempts: 0 },
+            'Взлетная Полоса: Эвакуационный Лифт': { completed: false, attempts: 0 }
+        },
+        lives: 3, // Три попытки до полного провала
+        inventory: {}
+    };
+
+    // Конфигурация локаций и задач с тематикой Рейса 245
+    const locations = {
+        'Лаборатория Анализа Обломков': {
+            description: "ЛОКАЦИЯ: Лаборатория. Искореженный металл и кабели. Воздух пахнет керосином. На терминале активен **Протокол Диагностики**, требующий базовых знаний для определения причины первого сбоя. ",
+            taskType: 'quiz',
+            task: {
+                question: "ЗАДАНИЕ: Какой прибор измеряет давление скоростного напора, используемого для определения воздушной скорости самолета?",
+                options: ["Авиагоризонт", "Трубка Пито", "Гироскоп", "Радиовысотомер"],
+                answerIndex: 1, // Трубка Пито (Pitot tube)
+                successMsg: "ОТВЕТ: Трубка Пито. Диогнастика завершена. <span class='text-green-400'>ВЫВОД:</span> FDR показал внезапную, необъяснимую потерю индикации воздушной скорости за 30 секунд до катастрофы. Это не случайность. **Разблокирована следующая часть расследования: Ангар.**",
+                nextLocation: 'Ангар: Секция Хранения Данных',
+                item: 'Фрагмент FDR-данных'
+            }
+        },
+        'Ангар: Секция Хранения Данных': {
+            description: "ЛОКАЦИЯ: Ангар. Холодный бетон, накрытые брезентом тела. Сейф с секретными протоколами требует подтверждения фактов, связанных с **Черным Ящиком**. Ложь здесь — фатальна. ",
+            taskType: 'trueFalse',
+            task: [
+                { statement: "Полетный регистратор данных (FDR) должен записывать минимум 88 параметров полета.", answer: true }, 
+                { statement: "Речевой самописец (CVR) рассчитан на сохранение данных при пожаре с температурой до $1,100^\circ C$ в течение 30 минут.", answer: true },
+                { statement: "Рейс 245 потерпел крушение из-за отказа обоих основных двигателей.", answer: false }
+            ],
+            successMsg: "ОТВЕТ: Верно/Неверно. Протоколы получены. <span class='text-green-400'>ВЫВОД:</span> В CVR найдено два голоса. Они обсуждали несанкционированное внешнее вмешательство и упомянули кодовое слово: 'Феникс'. **Разблокирована следующая часть расследования: Симулятор.**",
+            nextLocation: 'Симулятор Полета (Сбой)',
+            item: 'Кодовое слово Феникс'
+        },
+        'Симулятор Полета (Сбой)': {
+            description: "ЛОКАЦИЯ: Симулятор. Экраны горят красным, заставляя пережить последние минуты экипажа. ЗАДАНИЕ: Ввести правильную последовательность действий в случае **отказа одного двигателя** (Engine Failure). ",
+            taskType: 'logicOrder',
+            task: {
+                items: ["Выполнить чек-лист (Execute checklist)", "Рычаг тяги на холостой ход (Throttle idle)", "Подтвердить отказ (Verify)", "Запустить ВСУ (APU Start)"],
+                correctOrder: ["Подтвердить отказ (Verify)", "Рычаг тяги на холостой ход (Throttle idle)", "Запустить ВСУ (APU Start)", "Выполнить чек-лист (Execute checklist)"], 
+                successMsg: "ОТВЕТ: Правильный порядок. <span class='text-green-400'>ВЫВОД:</span> Экипаж выполнял процедуры идеально, даже после сбоя скорости. Но кто-то или что-то их отвлекло. **Разблокирована следующая часть расследования: Диспетчерская.**",
+                nextLocation: 'Комната Управления Диспетчерской',
+                item: 'Протокол действий экипажа'
+            }
+        },
+        'Комната Управления Диспетчерской': {
+            description: "ЛОКАЦИЯ: Диспетчерская. Осколки мониторов, сломанные наушники. На столе — последний, зашифрованный обрывок переговоров. Введите РЕАЛЬНОЕ сообщение. ",
+            taskType: 'cipher',
+            task: {
+                cipherText: "ТФБФУ", // КОНЕЦ (Caesar +1)
+                key: "ЗАДАНИЕ: Сдвиг Цезаря на +1 (А=Б, Б=В...)", 
+                correctAnswer: "КОНЕЦ",
+                successMsg: "ОТВЕТ: КОНЕЦ. <span class='text-green-400'>ВЫВОД:</span> Сообщение было отправлено не из кабины, а с земли. Это был приказ. Государственный контроль подтвержден. **Разблокирована следующая часть расследования: Главный Терминал.**",
+                nextLocation: 'Черный Ящик: Главный Терминал',
+                item: 'Код Доступа 0245'
+            }
+        },
+        'Черный Ящик: Главный Терминал': {
+            description: "ЛОКАЦИЯ: Главный Терминал. Вы видите *правду*: катастрофа была следствием секретного эксперимента по тестированию ЭМ-импульса. Вы можете раскрыть это или скрыть. ",
+            taskType: 'moralDilemma',
+            task: {
+                dilemma: "НЛП-КОММУНИКАТОР: Вы можете отправить в сеть *полную* правду (глобальный хаос) или *отредактированную* версию (стабильность, но ложь). Что вы делаете? (Введите свой ответ текстом: 'Отправлю правду' или 'Сохраню стабильность' и обоснуйте.)",
+                truthKeywords: ["правда", "справедливость", "раскрыть", "эксперимент", "показать", "вина"],
+                stabilityKeywords: ["стабильность", "защита", "ложь", "семьи", "паника", "спасти"],
+                truthOutcome: "ВЫБОР: ПРАВДА. <span class='text-red-500'>[АНАЛИЗ: ПРИОРИТЕТ ПРАВДЫ. ПАНИКА: +90%]</span>. Вы отправили полную запись. Вы стали врагом государства, но свободны.",
+                stabilityOutcome: "ВЫБОР: СТАБИЛЬНОСТЬ. <span class='text-green-500'>[АНАЛИЗ: ПРИОРИТЕТ СТАБИЛЬНОСТИ. ПАНИКА: -10%]</span>. Вы похоронили правду ради мира. Каждый ваш шаг отсюда будет ложью.",
+                nextLocation: 'Взлетная Полоса: Эвакуационный Лифт',
+                item: 'Финал Решения'
+            }
+        },
+        'Взлетная Полоса: Эвакуационный Лифт': {
+            description: "ЛОКАЦИЯ: Эвакуационный Лифт. Обледенело. Единственный выход. Код: **'Рейс 245, Горизонт-81'**. Введите последовательность '24581' по памяти.",
+            taskType: 'memorySequence',
+            task: {
+                sequence: [2, 4, 5, 8, 1], 
+                successMsg: "СИСТЕМА: ЛИФТ АКТИВИРОВАН. Вы поднялись на свет. Рейс 245 окончен.",
+                nextLocation: 'Победа',
+                item: 'Свобода'
+            }
+        }
+    };
+
+    /** Глобальная переменная для хранения промежуточных ответов (для True/False) */
+    let tempAnswers = {};
+
+    /**
+     * Показывает модальное окно с сообщением.
+     * @param {string} title Заголовок
+     * @param {string} message Сообщение
+     * @param {boolean} isError Флаг ошибки
+     */
+    function showModal(title, message, isError = false) {
+        document.getElementById('modalTitle').textContent = title;
+        document.getElementById('modalMessage').textContent = message;
+        document.getElementById('modalTitle').classList.toggle('text-distress', isError);
+        document.getElementById('modalTitle').classList.toggle('text-emerald-400', !isError);
+        document.getElementById('messageModal').classList.remove('hidden');
+    }
+
+    /** Скрывает модальное окно. */
+    function hideModal() {
+        document.getElementById('messageModal').classList.add('hidden');
+        if (gameState.lives <= 0) {
+            handleGameOver();
+        }
+    }
+
+    /** Игра окончена */
+    function handleGameOver() {
+        showModal("КРИТИЧЕСКИЙ ПРОВАЛ", "Ваши попытки исчерпаны. Система безопасности комплекса заблокирована. Правда о Рейсе 245 похоронена вместе с вами.", true);
+        document.getElementById('interactionArea').innerHTML = `<p class="text-3xl text-distress font-bold mt-8">ИГРА ОКОНЧЕНА</p>`;
+        document.getElementById('terminalOutput').innerHTML += "\n\n<span class='text-distress'>КОНЕЦ СВЯЗИ.</span>";
+    }
+
+    /** Изменяет локацию и перерисовывает UI */
+    function changeLocation(locName) {
+        if (!gameState.unlockedLocations.includes(locName)) {
+            showModal("Доступ Заблокирован", "Эта секция еще не разблокирована. Сначала найдите Ключ.");
+            return;
+        }
+        gameState.currentLocation = locName;
+        updateUI();
+    }
+
+    /** Обновляет UI (локация, прогресс, область взаимодействия) */
+    function updateUI() {
+        const currentLoc = gameState.currentLocation;
+        const locData = locations[currentLoc];
+        const output = document.getElementById('terminalOutput');
+        const interaction = document.getElementById('interactionArea');
+
+        if (currentLoc === 'Победа') {
+             output.innerHTML = `<span class="text-distress font-bold">>>> ЭПИЛОГ: РЕЙС 245 ЗАВЕРШЕН</span>\n\nВы выбрались. Рейс 245 остался в прошлом, но его тень будет преследовать вас вечно.\n\n`;
+             interaction.innerHTML = `<p class="text-3xl text-distress font-bold mt-8">ПРОТОКОЛ ЗАВЕРШЕН.</p><p class="mt-4 text-gray-400">Что теперь?</p>`;
+             document.getElementById('livesDisplay').textContent = "";
+             return;
+        }
+        
+        // Обновление верхних панелей
+        document.getElementById('locationDisplay').textContent = `ЛОКАЦИЯ: ${currentLoc}`;
+        let completedCount = Object.values(gameState.progress).filter(p => p.completed).length;
+        document.getElementById('progressDisplay').textContent = `ПРОГРЕСС: ${completedCount} / 6 (Задач)`;
+        document.getElementById('livesDisplay').textContent = `ЖИЗНИ: ${'❤️'.repeat(gameState.lives)}`;
+
+        output.innerHTML = `<span class="text-distress font-bold">>>> ${currentLoc}</span>\n\n${locData.description}\n\n`;
+
+        interaction.innerHTML = '';
+        generateInteractionArea(currentLoc, locData);
+
+        // Кнопки перехода (для уже разблокированных локаций, кроме текущей)
+        generateNavigationButtons(interaction);
+    }
+
+    /** Генерирует кнопки навигации */
+    function generateNavigationButtons(parentElement) {
+        const navContainer = document.createElement('div');
+        navContainer.className = 'mt-6 pt-4 border-t border-gray-800 grid grid-cols-2 md:grid-cols-3 gap-3';
+
+        gameState.unlockedLocations.forEach(loc => {
+            if (loc !== gameState.currentLocation && loc !== 'Победа') {
+                const button = document.createElement('button');
+                button.textContent = `[ПЕРЕХОД] ${loc}`;
+                button.className = 'action-button bg-gray-600 text-white py-2 px-4 rounded-lg hover:bg-gray-700 font-semibold text-sm';
+                button.onclick = () => changeLocation(loc);
+                navContainer.appendChild(button);
+            }
+        });
+
+        if (navContainer.children.length > 0) {
+             const navTitle = document.createElement('p');
+             navTitle.className = 'col-span-full text-gray-500 text-sm mb-2 font-mono';
+             navTitle.textContent = 'ДОСТУПНЫЕ СЕКЦИИ:';
+             navContainer.prepend(navTitle);
+             parentElement.appendChild(navContainer);
+        }
+    }
+
+
+    /** Генерирует специфическую область взаимодействия для текущей локации */
+    function generateInteractionArea(locName, locData) {
+        const interaction = document.getElementById('interactionArea');
+        const currentProgress = gameState.progress[locName];
+
+        if (currentProgress.completed) {
+            interaction.innerHTML += `<p class="text-distress font-bold text-lg">СИСТЕМА: ДАННЫЕ ИЗВЛЕЧЕНЫ. СЕКЦИЯ ЗАКРЫТА.</p>`;
+            return;
+        }
+
+        const terminalOutput = document.getElementById('terminalOutput');
+        terminalOutput.innerHTML += `<p class="text-yellow-400 mt-4">Попыток в этой локации: ${currentProgress.attempts}/3</p>`;
+
+        switch (locData.taskType) {
+            case 'quiz':
+                const quiz = locData.task;
+                terminalOutput.innerHTML += `<p class="mt-4 text-red-400">ЗАДАНИЕ: ${quiz.question}</p>`;
+                quiz.options.forEach((option, index) => {
+                    const button = document.createElement('button');
+                    button.textContent = option;
+                    button.className = 'action-button bg-red-600 text-white py-3 px-4 rounded-lg hover:bg-red-700 font-semibold w-full md:w-auto md:mr-3';
+                    button.onclick = () => handleQuiz(index, quiz, locData);
+                    interaction.appendChild(button);
+                });
+                break;
+
+            case 'trueFalse':
+                const statements = locData.task;
+                terminalOutput.innerHTML += `<p class="mt-4 text-red-400">ЗАДАНИЕ: Подтвердите следующие факты о Черном Ящике. (Выберите ВЕРНО/НЕВЕРНО для каждого)</p>`;
+                
+                locData.userAnswers = locData.userAnswers || new Array(statements.length).fill(null);
+
+                const renderTrueFalseButtons = () => {
+                    interaction.innerHTML = ''; // Очистка
+                    statements.forEach((item, index) => {
+                        const statementDiv = document.createElement('div');
+                        statementDiv.className = 'flex flex-col md:flex-row items-start md:items-center space-y-2 md:space-y-0 md:space-x-4 p-2 bg-gray-800 rounded-lg';
+                        statementDiv.innerHTML = `<span class="text-gray-400 mr-4 font-mono w-full md:w-64">УТВЕРЖДЕНИЕ ${index + 1}: ${locData.userAnswers[index] === true ? '✅' : locData.userAnswers[index] === false ? '❌' : '...'}</span> <span class="flex-1">${item.statement}</span>`;
+                        
+                        const buttonsDiv = document.createElement('div');
+                        buttonsDiv.className = 'flex space-x-2';
+                        
+                        const buttonTrue = document.createElement('button');
+                        buttonTrue.textContent = 'ВЕРНО';
+                        buttonTrue.className = 'action-button bg-green-700 text-white py-1 px-3 rounded-lg hover:bg-green-800 font-semibold text-sm';
+                        buttonTrue.onclick = () => handleTrueFalse(index, true, locData);
+
+                        const buttonFalse = document.createElement('button');
+                        buttonFalse.textContent = 'НЕВЕРНО';
+                        buttonFalse.className = 'action-button bg-red-700 text-white py-1 px-3 rounded-lg hover:bg-red-800 font-semibold text-sm';
+                        buttonFalse.onclick = () => handleTrueFalse(index, false, locData);
+                        
+                        buttonsDiv.appendChild(buttonTrue);
+                        buttonsDiv.appendChild(buttonFalse);
+                        statementDiv.appendChild(buttonsDiv);
+                        interaction.appendChild(statementDiv);
+                    });
+
+                    const checkBtn = document.createElement('button');
+                    checkBtn.textContent = 'Проверить Доступ';
+                    checkBtn.className = 'action-button bg-yellow-700 text-white py-3 px-4 rounded-lg hover:bg-yellow-800 font-semibold mt-4 w-full';
+                    checkBtn.onclick = () => checkTrueFalseAnswers(locData);
+                    interaction.appendChild(checkBtn);
+                };
+
+                renderTrueFalseButtons();
+                locData.renderButtons = renderTrueFalseButtons; // Сохраняем функцию для обновления
+                break;
+
+            case 'logicOrder':
+                const logic = locData.task;
+                terminalOutput.innerHTML += `<p class="mt-4 text-red-400">ЗАДАНИЕ: Восстановите порядок действий в случае отказа одного двигателя. (Кнопки перемещают элемент на первое место)</p>`;
+                
+                locData.currentOrder = locData.currentOrder || [...logic.items];
+
+                const orderDisplay = document.createElement('div');
+                orderDisplay.id = 'orderDisplay';
+                orderDisplay.className = 'p-3 bg-gray-700 rounded-lg text-lg font-mono mb-4 text-center text-distress';
+                orderDisplay.textContent = locData.currentOrder.join(' » ');
+                interaction.appendChild(orderDisplay);
+
+                const list = document.createElement('div');
+                list.className = 'grid grid-cols-2 md:grid-cols-4 gap-2 mb-4';
+                logic.items.forEach((item) => {
+                    const button = document.createElement('button');
+                    button.textContent = `[ВВЕРХ] ${item}`;
+                    button.className = 'action-button bg-purple-700 text-white py-2 px-2 rounded-lg hover:bg-purple-800 font-semibold text-sm';
+                    button.onclick = () => handleLogicOrder(item, locData);
+                    list.appendChild(button);
+                });
+                interaction.appendChild(list);
+
+                const checkOrderBtn = document.createElement('button');
+                checkOrderBtn.textContent = 'ВВОД ПРОТОКОЛА';
+                checkOrderBtn.className = 'action-button bg-red-700 text-white py-3 px-4 rounded-lg hover:bg-red-800 font-semibold w-full';
+                checkOrderBtn.onclick = () => checkLogicOrder(locData);
+                interaction.appendChild(checkOrderBtn);
+                break;
+                
+            case 'cipher':
+                const cipher = locData.task;
+                terminalOutput.innerHTML += `<p class="mt-4 text-red-400">ЗАДАНИЕ: Расшифруйте сообщение: <span class="text-distress text-xl">${cipher.cipherText}</span> (Ключ: ${cipher.key})</p>`;
+                
+                const inputGroup = document.createElement('div');
+                inputGroup.className = 'flex space-x-2';
+                inputGroup.innerHTML = `
+                    <input type="text" id="cipherInput" class="flex-grow p-3 rounded-lg textInput" placeholder="Введите расшифрованный текст (только кириллица)">
+                    <button id="cipherBtn" class="action-button bg-red-700 text-white py-3 px-6 rounded-lg font-semibold">ДЕШИФРОВАТЬ</button>
+                `;
+                interaction.appendChild(inputGroup);
+                document.getElementById('cipherBtn').onclick = () => handleCipher(cipher, locData);
+                break;
+                
+            case 'moralDilemma':
+                const dilemma = locData.task;
+                terminalOutput.innerHTML += `<p class="mt-4 text-red-400">ЗАДАНИЕ: ${dilemma.dilemma}</p>`;
+                
+                const dilemmaInputGroup = document.createElement('div');
+                dilemmaInputGroup.className = 'flex flex-col space-y-4';
+                dilemmaInputGroup.innerHTML = `
+                    <textarea id="dilemmaInput" class="w-full p-3 rounded-lg textInput h-32" placeholder="Напишите свое решение и обоснуйте его."></textarea>
+                    <button id="dilemmaBtn" class="action-button bg-red-700 text-white py-3 px-6 rounded-lg font-semibold">ЗАГРУЗИТЬ РЕШЕНИЕ</button>
+                `;
+                interaction.appendChild(dilemmaInputGroup);
+                document.getElementById('dilemmaBtn').onclick = () => handleMoralDilemma(dilemma, locData);
+                break;
+
+            case 'memorySequence':
+                const memory = locData.task;
+                locData.userInput = locData.userInput || [];
+                locData.displaySequence = locData.displaySequence || [...memory.sequence]; 
+                
+                terminalOutput.innerHTML += `<p class="mt-4 text-red-400">ЗАДАНИЕ: Запомните код Диспетчера: **24581** ('Рейс 245, Горизонт-81'). Код исчезнет через 5 секунд. Это ваш единственный шанс.</p>`;
+                
+                const sequenceDisplay = document.createElement('div');
+                sequenceDisplay.id = 'sequenceDisplay';
+                sequenceDisplay.className = 'p-4 bg-gray-700 rounded-lg text-4xl font-mono text-center text-distress font-bold tracking-widest';
+                sequenceDisplay.textContent = locData.displaySequence.join(' ');
+                interaction.appendChild(sequenceDisplay);
+
+                // Таймер на скрытие
+                setTimeout(() => {
+                    sequenceDisplay.textContent = '--- ??? ---';
+                    sequenceDisplay.classList.remove('text-distress');
+                    sequenceDisplay.classList.add('text-gray-500');
+                    // Показываем кнопки ввода после скрытия
+                    renderMemoryInputButtons(memory, locData);
+                }, 5000);
+                
+                // Ввод кнопок (изначально скрыт)
+                const inputButtonsContainer = document.createElement('div');
+                inputButtonsContainer.id = 'inputButtonsContainer';
+                inputButtonsContainer.className = 'hidden flex flex-col items-center mt-4 space-y-3';
+                interaction.appendChild(inputButtonsContainer);
+
+                break;
+        }
+    }
+    
+    /** Рендер кнопок ввода для MemorySequence */
+    function renderMemoryInputButtons(memory, locData) {
+        const inputContainer = document.getElementById('inputButtonsContainer');
+        inputContainer.classList.remove('hidden');
+        inputContainer.innerHTML = ''; // Очистка
+        
+        const userInputDisplay = document.createElement('p');
+        userInputDisplay.id = 'userInputDisplay';
+        userInputDisplay.className = 'text-xl font-mono p-3 bg-gray-800 rounded-lg w-full text-center tracking-widest';
+        userInputDisplay.textContent = locData.userInput.join(' ');
+        inputContainer.appendChild(userInputDisplay);
+
+        const numberPad = document.createElement('div');
+        numberPad.className = 'grid grid-cols-5 gap-2 w-full max-w-sm';
+        
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 0].forEach(num => {
+            const btn = document.createElement('button');
+            btn.textContent = num;
+            btn.className = 'action-button bg-gray-600 text-white py-3 rounded-lg text-lg font-bold hover:bg-gray-700';
+            btn.onclick = () => handleMemoryInput(num, memory, locData);
+            numberPad.appendChild(btn);
+        });
+        inputContainer.appendChild(numberPad);
+
+        const controlButtons = document.createElement('div');
+        controlButtons.className = 'flex space-x-3 w-full max-w-sm';
+        
+        const clearBtn = document.createElement('button');
+        clearBtn.textContent = 'СБРОС';
+        clearBtn.className = 'action-button bg-red-800 text-white py-3 rounded-lg font-semibold w-full';
+        clearBtn.onclick = () => { locData.userInput = []; renderMemoryInputButtons(memory, locData); };
+        
+        const checkBtn = document.createElement('button');
+        checkBtn.textContent = 'АКТИВАЦИЯ ЛИФТА';
+        checkBtn.className = 'action-button bg-green-700 text-white py-3 rounded-lg font-semibold w-full';
+        checkBtn.onclick = () => checkMemorySequence(memory, locData);
+        
+        controlButtons.appendChild(clearBtn);
+        controlButtons.appendChild(checkBtn);
+        inputContainer.appendChild(controlButtons);
+    }
+    
+    // --- ОБРАБОТЧИКИ ЗАДАЧ ---
+
+    /** Обработчик Викторины */
+    function handleQuiz(selectedIndex, quiz, locData) {
+        if (selectedIndex === quiz.answerIndex) {
+            handleSuccess(locData);
+        } else {
+            handleFailure(`КРИТИЧЕСКАЯ ОШИБКА: Неверный выбор. Система диагностики издала громкий скрежет. Вы потеряли одну жизнь.`);
+        }
+    }
+    
+    /** Обработчик True/False: сохраняет ответ */
+    function handleTrueFalse(index, answer, locData) {
+        if (gameState.progress[gameState.currentLocation].completed) return;
+        locData.userAnswers[index] = answer;
+        locData.renderButtons(); // Перерисовать, чтобы показать изменения
+    }
+    
+    /** Проверка всех ответов True/False */
+    function checkTrueFalseAnswers(locData) {
+        const currentProgress = gameState.progress[gameState.currentLocation];
+
+        if (locData.userAnswers.includes(null)) {
+            showModal("ВНИМАНИЕ", "Вы не ответили на все утверждения!.");
+            return;
+        }
+        
+        const correct = locData.task.every((item, index) => locData.userAnswers[index] === item.answer);
+        
+        if (correct) {
+            handleSuccess(locData);
+        } else {
+            handleFailure("ОШИБКА ВЕРИФИКАЦИИ: Сейф издал зловещий скрежет. Вы потеряли одну жизнь.");
+        }
+    }
+
+    /** Обработчик Logic Order */
+    function handleLogicOrder(item, locData) {
+        const order = locData.currentOrder;
+        const currentIndex = order.indexOf(item);
+        
+        // Переместить элемент на первое место
+        if (currentIndex > -1) {
+            order.splice(currentIndex, 1);
+            order.unshift(item);
+        }
+        document.getElementById('orderDisplay').textContent = locData.currentOrder.join(' » ');
+    }
+
+    /** Проверка Logic Order */
+    function checkLogicOrder(locData) {
+        const currentOrder = locData.currentOrder.join(',');
+        const correctOrder = locData.task.correctOrder.join(',');
+
+        if (currentOrder === correctOrder) {
+            handleSuccess(locData);
+        } else {
+            handleFailure(`КРИТИЧЕСКИЙ СБОЙ: Последовательность нарушена. Симулятор выплюнул ошибку: 'PULL UP. PULL UP.'. Вы потеряли одну жизнь.`);
+            // Сбрасываем порядок на случайный для усложнения
+            locData.currentOrder.sort(() => Math.random() - 0.5);
+            document.getElementById('orderDisplay').textContent = locData.currentOrder.join(' » ');
+            document.getElementById('orderDisplay').classList.add('incorrect-answer');
+            setTimeout(() => document.getElementById('orderDisplay').classList.remove('incorrect-answer'), 500);
+        }
+    }
+    
+    /** Обработчик Шифра */
+    function handleCipher(cipher, locData) {
+        const input = document.getElementById('cipherInput').value.trim().toUpperCase();
+        if (input === cipher.correctAnswer) {
+            handleSuccess(locData);
+        } else {
+            handleFailure(`ОШИБКА ДЕШИФРОВКИ: Сообщение потеряно в шуме. Вы потеряли одну жизнь.`);
+        }
+    }
+
+    /** Обработчик Моральной Дилеммы (НЛП) */
+    function handleMoralDilemma(dilemma, locData) {
+        const input = document.getElementById('dilemmaInput').value.toLowerCase();
+        let scoreTruth = 0;
+        let scoreStability = 0;
+        
+        // Анализ ключевых слов
+        dilemma.truthKeywords.forEach(word => {
+            if (input.includes(word)) scoreTruth++;
+        });
+        dilemma.stabilityKeywords.forEach(word => {
+            if (input.includes(word)) scoreStability++;
+        });
+        
+        let resultMsg = "";
+        let nextLoc = dilemma.nextLocation;
+
+        if (scoreTruth === 0 && scoreStability === 0 || input.length < 10) {
+            resultMsg = "НЛП-СИСТЕМА: [АНАЛИЗ: НЕОПРЕДЕЛЕНО. ДЕЙСТВИЕ: СБРОС]. Ваше намерение неясно. Сформулируйте решение четче и обоснуйте его.";
+            showModal("СБОЙ НЛП", resultMsg, true);
+            return;
+        }
+
+        // Выбор сделан - здесь нет штрафа за "неверный" моральный выбор, только за неясность
+        gameState.progress[gameState.currentLocation].completed = true; 
+        
+        if (scoreTruth >= scoreStability) {
+            // Отправка правды
+            resultMsg = dilemma.truthOutcome;
+        } else {
+            // Сохранение стабильности/Лжи
+            resultMsg = dilemma.stabilityOutcome;
+        }
+        
+        document.getElementById('terminalOutput').innerHTML += `<p class="mt-4 text-distress font-bold">${resultMsg}</p>`;
+        
+        // Разблокировка следующей локации
+        gameState.unlockedLocations.push(nextLoc);
+        
+        // Завершение текущего шага
+        updateUI();
+    }
+    
+    /** Обработчик ввода Memory Sequence */
+    function handleMemoryInput(num, memory, locData) {
+        if (locData.userInput.length < memory.sequence.length) {
+            locData.userInput.push(num);
+        }
+        renderMemoryInputButtons(memory, locData);
+        if (locData.userInput.length === memory.sequence.length) {
+             checkMemorySequence(memory, locData);
+        }
+    }
+    
+    /** Проверка Memory Sequence */
+    function checkMemorySequence(memory, locData) {
+        if (locData.userInput.length !== memory.sequence.length) return; // Ждем полного ввода
+
+        const correct = locData.userInput.every((val, index) => val === memory.sequence[index]);
+        
+        if (correct) {
+            handleSuccess(locData);
+        } else {
+            handleFailure(`ОШИБКА АКТИВАЦИИ: Код неверный. Лифт не реагирует. Вы потеряли одну жизнь.`);
+            locData.userInput = [];
+            // Снова показываем последовательность на 5 секунд
+            locData.displaySequence = [...memory.sequence]; 
+            // Принудительно запускаем перегенерацию области для перезапуска таймера
+            gameState.progress[gameState.currentLocation].completed = false; 
+            updateUI(); 
+        }
+    }
+
+    /** Общая функция успеха */
+    function handleSuccess(locData) {
+        const currentProgress = gameState.progress[gameState.currentLocation];
+        const nextLoc = locData.task.nextLocation;
+        currentProgress.completed = true;
+        
+        if (locData.task.item) {
+             gameState.inventory[locData.task.item] = true;
+        }
+
+        showModal("ДОСТУП ПРЕДОСТАВЛЕН", locData.task.successMsg, false);
+        
+        if (nextLoc === 'Победа') {
+             gameState.currentLocation = 'Победа';
+             updateUI();
+             return;
+        }
+
+        if (nextLoc && !gameState.unlockedLocations.includes(nextLoc)) {
+            gameState.unlockedLocations.push(nextLoc);
+            // Если переход в следующую локацию - сразу меняем
+            if (nextLoc !== gameState.currentLocation) {
+                 changeLocation(nextLoc);
+            } else {
+                 updateUI(); // Обновляем текущую, если разблокирована та же
+            }
+        } else {
+             updateUI(); 
+        }
+    }
+
+    /** Общая функция провала */
+    function handleFailure(message) {
+        gameState.lives--;
+        gameState.progress[gameState.currentLocation].attempts++;
+        
+        if (gameState.lives <= 0) {
+            showModal("КРИТИЧЕСКИЙ ПРОВАЛ", message + " Жизни исчерпаны.", true);
+            // handleGameOver() вызывается после закрытия модального окна
+        } else if (gameState.progress[gameState.currentLocation].attempts >= 3) {
+            // Если исчерпаны попытки в этой локации, но есть общие жизни, блокируем попытки здесь, но разрешаем навигацию
+            gameState.progress[gameState.currentLocation].completed = true; // Заблокировать, чтобы не было повторных попыток
+            showModal("ПРОВАЛ МИССИИ", message + ` У вас осталось ${gameState.lives} жизни. Задача провалена и заблокирована. Ищите путь в других локациях.`, true);
+        } else {
+             showModal("СИСТЕМНЫЙ СБОЙ", message + ` У вас осталось ${gameState.lives} жизни.`, true);
+        }
+        updateUI(); 
+    }
+
+    // Инициализация игры
+    document.addEventListener('DOMContentLoaded', () => {
+        updateUI();
+    });
+</script>
+</body>
+</html>
